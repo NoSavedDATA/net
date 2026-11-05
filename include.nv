@@ -15,27 +15,36 @@ proto void reuseaddr(int)
 proto void c_send(int,str)
 proto int c_connect(int, str, int)
 
-class Net
+class TcpListener
 	int fd, socket
+	any addr_st
 	str ip
 	ctor(str ip)
 		print("Start connection: ", ip)
 		# AF_INET=2 (ipv4)
 		# SOCK_STREAM=1 (TCP)
-		int fd = c_socket(2,1,0)
-		reuseaddr(fd)
-		any addr_st = bind_ipv4(fd, ip, 8080)
-		c_listen(fd)
-		self.socket = net_accept(fd, addr_st)
+		selffd = c_socket(2,1,0)
+		reuseaddr(selffd)
+		self.addr_st = bind_ipv4(self.fd, ip, 8080)
+		c_listen(self.fd)
 
+	def void accept()
+		self.socket = net_accept(self.fd, self.addr_st)
+
+	def TcpStream get_stream()
+		return new TcpStream(self.socket)
+
+class TcpStream
+	int socket
+	ctor(int client_fd)
+		self.socket = client_fd
+		
 	def void read(char[] buf, int size)
-		print("connection read")
         i64 msg_size = c_read(self.socket, buf, size)
 		if msg_size < size
 			buf[msg_size] = '\0'
 		
 	def void send(str msg)
-		print("connection send")
 		c_send(self.socket, msg)
 
 
@@ -56,12 +65,11 @@ class NetClient
             print("Connected successfully!")
             
     def void read(char[] buf, int size)
-		print("client read")
         i64 msg_size = c_read(self.socket, buf, size)
-
 		if msg_size < size
 			buf[msg_size] = '\0'
-        
+
+
     def void send(str msg)
 		print("client send")
         c_send(self.socket, msg)
