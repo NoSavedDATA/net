@@ -1,6 +1,7 @@
 proto int sys socket(int,int,int)
 proto void sys bind(int,any,int)
 proto int sys accept(int,any,int)
+proto int sys connect(int,any,int)
 proto void sys listen(int,int)
 proto int sys setsockopt(int,int,int,any,int)
 proto void sys close(int)
@@ -12,6 +13,7 @@ proto int net_accept(int,any)
 proto void c_listen(int)
 proto void reuseaddr(int)
 proto void c_send(int,str)
+proto int c_connect(int, str, int)
 
 class Net
 	int fd, socket
@@ -20,25 +22,46 @@ class Net
 		print("Start connection: ", ip)
 		# AF_INET=2 (ipv4)
 		# SOCK_STREAM=1 (TCP)
-		print("fd")
 		int fd = c_socket(2,1,0)
-		print("bind")
 		reuseaddr(fd)
 		any addr_st = bind_ipv4(fd, ip, 8080)
-		print("c_listen")
 		c_listen(fd)
-		print("accept")
 		self.socket = net_accept(fd, addr_st)
-		print("Net ok")
 
 	def void read(char[] buf, int size)
 		print("connection read")
-		c_read(self.socket, buf offby 0, size)
+        i64 msg_size = c_read(self.socket, buf, size)
+		if msg_size < size
+			buf[msg_size] = '\0'
 		
 	def void send(str msg)
 		print("connection send")
 		c_send(self.socket, msg)
 
-	
 
-	# def void send()
+
+class NetClient
+    int socket
+    str target_ip
+    
+    ctor(str target_ip)
+        print("Connecting to: ", target_ip)
+        self.socket = c_socket(2,1,0)
+        
+        # Call connect to reach out to the laptop's server
+        int result = c_connect(self.socket, target_ip, 8080)
+        if result < 0
+            print("Connection failed!")
+        else
+            print("Connected successfully!")
+            
+    def void read(char[] buf, int size)
+		print("client read")
+        i64 msg_size = c_read(self.socket, buf, size)
+
+		if msg_size < size
+			buf[msg_size] = '\0'
+        
+    def void send(str msg)
+		print("client send")
+        c_send(self.socket, msg)

@@ -159,3 +159,65 @@ extern "C" Value *net_accept(Parser_Struct *parser_struct, Function *TheFunction
     // accept returns the new socket file descriptor as an i32
     return callret("accept", {sockfd, addr_ptr, AddrLenAlloca});
 }
+
+
+
+extern "C" Value *c_connect(Parser_Struct *parser_struct, Function *TheFunction,
+                 std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
+                 Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
+    
+    Value *sockfd = Builder->CreateIntCast(ArgsV[0], intTy, true);
+    
+    // IP String unpacking
+    Value *ip_str_struct = ArgsV[1];
+    Value *ip_ptr = Builder->CreateExtractValue(ip_str_struct, {0});
+    
+    // Port unpacking
+    Value *port_val = Builder->CreateIntCast(ArgsV[2], int16Ty, false);
+
+    // htons
+    Function *htons_func = TheFunction->getParent()->getFunction("htons");
+    if (!htons_func) {
+        FunctionType *htonsType = FunctionType::get(int16Ty, {int16Ty}, false);
+        htons_func = Function::Create(htonsType, Function::ExternalLinkage, "htons", TheFunction->getParent());
+    }
+    Value *network_port = Builder->CreateCall(htons_func, {port_val});
+
+    // inet_addr
+    Function *inet_addr_func = TheFunction->getParent()->getFunction("inet_addr");
+    if (!inet_addr_func) {
+        FunctionType *inetAddrType = FunctionType::get(intTy, {int8PtrTy}, false);
+        inet_addr_func = Function::Create(inetAddrType, Function::ExternalLinkage, "inet_addr", TheFunction->getParent());
+    }
+    Value *network_ip = Builder->CreateCall(inet_addr_func, {ip_ptr});
+
+    // sockaddr_in Struct
+    StructType *SockAddrInTy = StructType::getTypeByName(Builder->getContext(), "struct.sockaddr_in");
+    if (!SockAddrInTy) {
+        SockAddrInTy = StructType::create(Builder->getContext(), "struct.sockaddr_in");
+        SockAddrInTy->setBody({
+            int16Ty,
+            int16Ty,
+            intTy,
+            ArrayType::get(Builder->getInt8Ty(), 8)
+        }, false);
+    }
+
+    AllocaInst *AddrAlloca = Builder->CreateAlloca(SockAddrInTy, nullptr, "address");
+
+    Value *FamilyPtr = Builder->CreateStructGEP(SockAddrInTy, AddrAlloca, 0, "sin_family");
+    Builder->CreateStore(Builder->getInt16(2), FamilyPtr);
+
+    Value *PortPtr = Builder->CreateStructGEP(SockAddrInTy, AddrAlloca, 1, "sin_port");
+    Builder->CreateStore(network_port, PortPtr);
+
+    Value *AddrPtr = Builder->CreateStructGEP(SockAddrInTy, AddrAlloca, 2, "sin_addr");
+    Builder->CreateStore(network_ip, AddrPtr);
+
+    Value *CastAddr = Builder->CreatePointerCast(AddrAlloca, int8PtrTy);
+    Value *AddrLen = Builder->getInt32(16); 
+
+    // Call connect() instead of bind()
+    // It returns 0 on success, -1 on failure
+    return callret("connect", {sockfd, CastAddr, AddrLen});
+}
