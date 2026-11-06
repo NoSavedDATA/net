@@ -17,7 +17,7 @@ extern "C" Value *c_socket(Parser_Struct *parser_struct, Function *TheFunction,
 extern "C" Value *c_listen(Parser_Struct *parser_struct, Function *TheFunction,
                  std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
                  Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
-    return callret("listen", {ArgsV[0], const_int(3)});
+    return callret("listen", {ArgsV[0], const_int(128)});
 }
 
 
@@ -29,7 +29,8 @@ extern "C" Value *c_send(Parser_Struct *parser_struct, Function *TheFunction,
     Value *str = ArgsV[1];
     Value *msg = Builder->CreateExtractValue(str, {0});
     Value *msg_size = Builder->CreateExtractValue(str, {1});
-    return callret("send", {ArgsV[0], msg, msg_size, const_int(0)});
+    Value *msg_nosignal = const_int(16384);
+    return callret("send", {ArgsV[0], msg, msg_size, msg_nosignal});
 }
 
 extern "C" Value *c_sendchar(Parser_Struct *parser_struct, Function *TheFunction,
@@ -37,7 +38,8 @@ extern "C" Value *c_sendchar(Parser_Struct *parser_struct, Function *TheFunction
                  Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
     Value *msg = ArgsV[1];
     Value *msg_size = callret("strlen", {msg});
-    return callret("send", {ArgsV[0], msg, msg_size, const_int(0)});
+    Value *msg_nosignal = const_int(16384);
+    return callret("send", {ArgsV[0], msg, msg_size, msg_nosignal});
 }
 
 
