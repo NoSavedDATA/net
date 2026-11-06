@@ -42,13 +42,14 @@ class TcpStream
 	ctor(int client_fd)
 		self.socket = client_fd
 		
-	def void read(char[] buf, int size)
+	def i64 read(char[] buf, int size)
         i64 msg_size = c_read(self.socket, buf, size - 1)
-		print("read size: ", msg_size)
+		print("READ: ", msg_size)
         if msg_size >= 0
             buf[msg_size] = '\0'
         else
-            buf[0] = '\0'		
+            buf[0] = '\0'
+        return msg_size
 
 	def void close()
 		c_close(self.socket)
@@ -73,13 +74,18 @@ class NetServer
 	ctor(str ip)
 		self.listener = new TcpListener(ip)
 	def void start(Function<void,TcpStream> myfn)
-		int i=0
-		while i<5000
-			i = i + 1
-			print("conn: ", i)
-			self.listener.accept()
-			var conn = self.listener.get_stream()
-			spawn myfn(conn)
+        int i=0
+        while true
+            self.listener.accept()
+            
+            # Guard against EMFILE (too many open files)
+            if self.listener.socket < 0
+                continue 
+                
+            i = i + 1
+            print("conn: ", i)
+            var conn = self.listener.get_stream()
+            spawn myfn(conn)
 		print("sleep")
 		sleep(5)
 
@@ -92,22 +98,26 @@ class NetClient
         print("Connecting to: ", target_ip)
         self.socket = c_socket(2,1,0)
         
-        # Call connect to reach out to the laptop's server
         int result = c_connect(self.socket, target_ip, 8080)
         if result < 0
-            print("Connection failed!")
+            print("Connection failed! Out of ports.")
+            c_close(self.socket)
+            self.socket = -1  # Mark as invalid
         else
             print("Connected successfully!")
             
-    def void read(char[] buf, int size)
-        i64 msg_size = c_read(self.socket, buf, size)
-		if msg_size < size
-			buf[msg_size] = '\0'
-
-
     def void send(str msg)
-		print("client send")
+        if self.socket < 0
+            return
+        print("client send")
         c_send(self.socket, msg)
+
+    def void read(char[] buf, int size)
+        if self.socket < 0
+            return
+        i64 msg_size = c_read(self.socket, buf, size)
+        if msg_size < size and msg_size >= 0
+            buf[msg_size] = '\0'
 
 	def void disown()
 		c_close(self.socket)

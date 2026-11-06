@@ -58,14 +58,10 @@ extern "C" Value *neve_close(Parser_Struct *parser_struct, Function *TheFunction
 extern "C" Value *reuseaddr(Parser_Struct *parser_struct, Function *TheFunction,
                  std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
                  Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
-
-    // ArgsV[0] = socket file descriptor
     Value *sockfd = Builder->CreateIntCast(ArgsV[0], intTy, true);
     
-    // level = SOL_SOCKET (usually 1 on Linux)
     Value *level = const_int(1);
     
-    // optname = SO_REUSEADDR (usually 2 on Linux)
     Value *optname = const_int(2);
     
 
@@ -76,10 +72,8 @@ extern "C" Value *reuseaddr(Parser_Struct *parser_struct, Function *TheFunction,
     Builder->CreateStore(Builder->getInt32(1), OptValAlloca);
     Value *optval_ptr = Builder->CreatePointerCast(OptValAlloca, int8PtrTy);
     
-    // optlen = sizeof(int) (which is 4 bytes)
     Value *optlen = const_int(4);
     
-    // Call setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval))
     return callret("setsockopt", {sockfd, level, optname, optval_ptr, optlen});
 }
 
