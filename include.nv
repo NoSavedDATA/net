@@ -81,7 +81,6 @@ class NetServer
             # Guard against EMFILE (too many open files)
             if self.listener.socket < 0
                 continue 
-                
             i = i + 1
             print("conn: ", i)
             var conn = self.listener.get_stream()
