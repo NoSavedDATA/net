@@ -13,6 +13,8 @@ proto int net_accept(int,any)
 proto void c_listen(int)
 proto void reuseaddr(int)
 proto void c_send(int,str)
+proto void c_sendchar(int,char[])
+proto void c_close(int)
 proto int c_connect(int, str, int)
 
 class TcpListener
@@ -23,8 +25,8 @@ class TcpListener
 		print("Start connection: ", ip)
 		# AF_INET=2 (ipv4)
 		# SOCK_STREAM=1 (TCP)
-		selffd = c_socket(2,1,0)
-		reuseaddr(selffd)
+		self.fd = c_socket(2,1,0)
+		reuseaddr(self.fd)
 		self.addr_st = bind_ipv4(self.fd, ip, 8080)
 		c_listen(self.fd)
 
@@ -34,19 +36,52 @@ class TcpListener
 	def TcpStream get_stream()
 		return new TcpStream(self.socket)
 
+
 class TcpStream
 	int socket
 	ctor(int client_fd)
 		self.socket = client_fd
 		
 	def void read(char[] buf, int size)
-        i64 msg_size = c_read(self.socket, buf, size)
-		if msg_size < size
-			buf[msg_size] = '\0'
-		
+        i64 msg_size = c_read(self.socket, buf, size - 1)
+		print("read size: ", msg_size)
+        if msg_size >= 0
+            buf[msg_size] = '\0'
+        else
+            buf[0] = '\0'		
+
+	def void close()
+		c_close(self.socket)
+
 	def void send(str msg)
+		print("send as str")
 		c_send(self.socket, msg)
 
+	def void sendchar(char[] msg)
+		print("AS A CHAR")
+		c_sendchar(self.socket, msg)
+	
+	def void disown()
+		c_close(self.socket)
+
+
+
+
+class NetServer
+	str ip
+	TcpListener listener
+	ctor(str ip)
+		self.listener = new TcpListener(ip)
+	def void start(Function<void,TcpStream> myfn)
+		int i=0
+		while i<5000
+			i = i + 1
+			print("conn: ", i)
+			self.listener.accept()
+			var conn = self.listener.get_stream()
+			spawn myfn(conn)
+		print("sleep")
+		sleep(5)
 
 
 class NetClient
@@ -73,3 +108,6 @@ class NetClient
     def void send(str msg)
 		print("client send")
         c_send(self.socket, msg)
+
+	def void disown()
+		c_close(self.socket)

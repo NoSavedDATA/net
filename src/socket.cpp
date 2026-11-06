@@ -32,6 +32,15 @@ extern "C" Value *c_send(Parser_Struct *parser_struct, Function *TheFunction,
     return callret("send", {ArgsV[0], msg, msg_size, const_int(0)});
 }
 
+extern "C" Value *c_sendchar(Parser_Struct *parser_struct, Function *TheFunction,
+                 std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
+                 Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
+    Value *msg = ArgsV[1];
+    Value *msg_size = callret("strlen", {msg});
+    return callret("send", {ArgsV[0], msg, msg_size, const_int(0)});
+}
+
+
 // close(int fd)
 extern "C" Value *neve_close(Parser_Struct *parser_struct, Function *TheFunction,
                  std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
@@ -47,6 +56,7 @@ extern "C" Value *neve_close(Parser_Struct *parser_struct, Function *TheFunction
 extern "C" Value *reuseaddr(Parser_Struct *parser_struct, Function *TheFunction,
                  std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
                  Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
+
     // ArgsV[0] = socket file descriptor
     Value *sockfd = Builder->CreateIntCast(ArgsV[0], intTy, true);
     
@@ -56,8 +66,11 @@ extern "C" Value *reuseaddr(Parser_Struct *parser_struct, Function *TheFunction,
     // optname = SO_REUSEADDR (usually 2 on Linux)
     Value *optname = const_int(2);
     
-    // optval = 1 (we allocate an integer, set it to 1, and cast to void*)
-    AllocaInst *OptValAlloca = Builder->CreateAlloca(intTy, nullptr, "optval");
+
+    Value *OptValAlloca = CreateEntryBlockAlloca(TheFunction,
+                                "reuseaddr.addr",
+                                intTy);
+
     Builder->CreateStore(Builder->getInt32(1), OptValAlloca);
     Value *optval_ptr = Builder->CreatePointerCast(OptValAlloca, int8PtrTy);
     
@@ -114,7 +127,9 @@ extern "C" Value *bind_ipv4(Parser_Struct *parser_struct, Function *TheFunction,
         }, false);
     }
 
-    AllocaInst *AddrAlloca = Builder->CreateAlloca(SockAddrInTy, nullptr, "address");
+    Value *AddrAlloca = CreateEntryBlockAlloca(TheFunction,
+                                "bind.addr",
+                                SockAddrInTy);
 
     // address.sin_family = AF_INET (usually 2)
     Value *FamilyPtr = Builder->CreateStructGEP(SockAddrInTy, AddrAlloca, 0, "sin_family");
@@ -145,21 +160,32 @@ extern "C" Value *net_accept(Parser_Struct *parser_struct, Function *TheFunction
                  Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
     
     Value *sockfd = Builder->CreateIntCast(ArgsV[0], intTy, true);
-    Value *addr_ptr = Builder->CreatePointerCast(ArgsV[1], int8PtrTy);
     
-    // 1. Allocate an integer on the stack for `addrlen`
-    // This is the equivalent of: int addrlen;
-    AllocaInst *AddrLenAlloca = Builder->CreateAlloca(intTy, nullptr, "addrlen");
-    
-    // 2. Initialize it to 16 (sizeof(struct sockaddr_in))
-    // This is the equivalent of: addrlen = sizeof(address);
+    // 1. Allocate addrlen in the entry block
+    Value *AddrLenAlloca = CreateEntryBlockAlloca(TheFunction, 
+                                "net_accept.addrlen", 
+                                intTy);
     Builder->CreateStore(Builder->getInt32(16), AddrLenAlloca);
     
-    // 3. Call the system accept(server_fd, &address, &addrlen)
-    // accept returns the new socket file descriptor as an i32
+    // 2. Allocate the client address buffer in the entry block!
+    // We allocate 16 bytes (sizeof struct sockaddr_in).
+    llvm::Type *AddrBufferTy = ArrayType::get(Builder->getInt8Ty(), 16);
+    Value *ClientAddrAlloca = CreateEntryBlockAlloca(TheFunction, 
+                                "net_accept.client_addr", 
+                                AddrBufferTy);
+    
+    Value *addr_ptr = Builder->CreatePointerCast(ClientAddrAlloca, int8PtrTy);
+    
+    // 3. Call the system accept(server_fd, &client_addr, &addrlen)
     return callret("accept", {sockfd, addr_ptr, AddrLenAlloca});
 }
 
+
+extern "C" Value *c_close(Parser_Struct *parser_struct, Function *TheFunction,
+                 std::string Callee, Data_Tree data_type, std::vector<Data_Tree> &args_type,
+                 Value *scope_struct, std::vector<std::unique_ptr<ExprAST>> &Args, std::vector<Value*> &ArgsV) {
+    return callret("close", {ArgsV[0]});
+}
 
 
 extern "C" Value *c_connect(Parser_Struct *parser_struct, Function *TheFunction,
@@ -203,7 +229,9 @@ extern "C" Value *c_connect(Parser_Struct *parser_struct, Function *TheFunction,
         }, false);
     }
 
-    AllocaInst *AddrAlloca = Builder->CreateAlloca(SockAddrInTy, nullptr, "address");
+    Value *AddrAlloca = CreateEntryBlockAlloca(TheFunction,
+                                "net_accept.addrlen",
+                                SockAddrInTy);
 
     Value *FamilyPtr = Builder->CreateStructGEP(SockAddrInTy, AddrAlloca, 0, "sin_family");
     Builder->CreateStore(Builder->getInt16(2), FamilyPtr);
