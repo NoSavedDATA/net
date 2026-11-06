@@ -69,25 +69,27 @@ class TcpStream
 
 
 class NetServer
-	str ip
-	TcpListener listener
-	ctor(str ip)
-		self.listener = new TcpListener(ip)
-	def void start(Function<void,TcpStream> myfn)
+    str ip
+    TcpListener listener
+    ctor(str ip)
+        self.listener = new TcpListener(ip)
+        
+    def void start(Function<void,TcpStream> myfn)
         int i=0
         while true
             self.listener.accept()
             
             # Guard against EMFILE (too many open files)
             if self.listener.socket < 0
+                print("Resource limit reached (EMFILE). Cooling down...")
+                # Yield the thread so the OS can clean up closed sockets
+                sleep(1) 
                 continue 
+                
             i = i + 1
-            print("conn: ", i)
+            # print("conn: ", i)
             var conn = self.listener.get_stream()
             spawn myfn(conn)
-		print("sleep")
-		sleep(5)
-
 
 class NetClient
     int socket
